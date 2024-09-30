@@ -143,3 +143,44 @@ function get_coords(Box,J)
     z = [Box_x[5] + (i-1)*dx[3] for i in 1:J[3]]
     return x, y ,z
 end
+
+
+function get_rho(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
+
+    Dx = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[1], xmax=Box_x[2], N=J[1])
+    Dy = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[3], xmax=Box_x[4], N=J[2])
+    Dz = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[3], xmax=Box_x[4], N=J[3])
+
+    Dϕ = Array{ComplexF64}(undef, 3, J...)
+    ρ = Array{Float64}(undef,J...)
+
+    for i in 1:J[1]
+        for j in 1:J[2]
+            Dϕ[3,i,j,:] = Dz*ϕ[i,j,:]
+        end
+    end
+    for j in 1:J[2]
+        for k in 1:J[3]
+            Dϕ[1,:,j,k] = Dx*ϕ[:,j,k]
+        end
+    end
+    for i in 1:J[1]
+        for k in 1:J[3]
+            Dϕ[2,i,:,k] = Dy*ϕ[i,:,k]
+        end
+    end
+
+    ρ = zeros(J...)
+
+    for i in 1:J[1]
+        for j in 1:J[2]
+            for k in 1:J[3]
+                for d in 1:3
+                    ρ[i,j,k] = ρ[i,j,k] + real(Dϕ[d,i,j,k]*conj(Dϕ[d,i,j,k]))
+                end
+                ρ[i,j,k] = ρ[i,j,k] + real(ϕ_t[i,j,k]*conj(ϕ_t[i,j,k]))
+            end
+        end
+    end
+    return 2.0*ρ[:,:,:]
+end
