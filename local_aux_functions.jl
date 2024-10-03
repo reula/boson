@@ -184,3 +184,86 @@ function get_rho(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
     end
     return 2.0*ρ[:,:,:]
 end
+
+"""
+function to relax an initial data
+"""
+function F(u,t,p)
+    x,y,z,dxu,dyu,dzu,Dx,Dy,Dz,D2x,D2y,D2z,d2,dx,ρ,J,par = p 
+    a, b, τ = par 
+    d2 .= 0.0
+    for i in 1:J[1]
+        for j in 1:J[2]
+            dzu[i,j,:] = Dz*u[1,i,j,:]
+            d2[i,j,:] = D2z*u[1,i,j,:]
+        end
+    end
+    for i in 1:J[1]
+        for k in 1:J[3]
+            dyu[i,:,k] = Dy*u[1,i,:,k]
+            d2[i,:,k] += D2y*u[1,i,:,k] 
+        end
+    end
+    for j in 1:J[2]
+        for k in 1:J[3]
+            dxu[:,j,k] = Dx*u[1,:,j,k]
+            d2[:,j,k] += D2x*u[1,:,j,k] 
+        end
+    end
+
+    du[1,:,:,:] .= u[2,:,:,:]
+    @. du[2,:,:,:] .= d2[:,:,:] + ρ[:,:,:]*u[2,:,:,:]^5 - τ * u[2,:,:,:]
+    #boundaries 
+    for k in (1,J[3])
+        for i in 1:J[1]
+            for j in 1:J[2]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0)/r))/dx[3]
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in 1:J[1]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[2]
+            end
+        end
+    end
+    for i in (1,J[1])
+        for j in 1:J[2]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[1]
+            end
+        end
+    end
+    return du[:,:,:,:]
+end
+
+
+function chichon(x,x0,Box,r0,p)
+    d = x - x0
+    r02 = r0^2
+    r2 = d'*d
+    if r2 < r0^2 
+        return (r02 - r2)^p/r02^p
+    else
+        return 0.0
+    end
+end
+
+
+function get_source(f, par)
+    @show x,y,z,x0,Box_x, r0, p, J = par
+    m = zeros(J...)
+    for i in 1:J[1]
+        for j in 1:J[2]
+            for k in 1:J[3]
+                m[i,j,k] = f([x[i],y[j],z[k]],x0,Box_x,r0,p)
+            end
+        end
+    end
+    return m[:,:,:]
+end
+
