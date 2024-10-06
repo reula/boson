@@ -212,13 +212,15 @@ function F(u,t,p)
     end
 
     du[1,:,:,:] .= u[2,:,:,:]
-    @. du[2,:,:,:] .= d2[:,:,:] + ρ[:,:,:]*u[2,:,:,:]^5 - τ * u[2,:,:,:]
-    #boundaries 
+    @. du[2,:,:,:] .= d2[:,:,:]  - τ * u[2,:,:,:] + ρ[:,:,:]#*u[2,:,:,:]^5
+
+    #boundaries (fases)
+
     for k in (1,J[3])
         for i in 1:J[1]
             for j in 1:J[2]
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0)/r))/dx[3]
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + 0.0*x[i]*dxu[i,j,k] + 0.0*y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0)/r))/dx[3]*2.0
             end
         end
     end
@@ -226,7 +228,7 @@ function F(u,t,p)
         for i in 1:J[1]
             for k in 1:J[3]
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[2]
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(0.0*z[k]*dzu[i,j,k] + 0.0*x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[2]*2.0
             end
         end
     end
@@ -234,13 +236,158 @@ function F(u,t,p)
         for j in 1:J[2]
             for k in 1:J[3]
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[1]
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(0.0*z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + 0.0*y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[1]*2.0
             end
         end
     end
+    
+    #boundaries (edges)
+    
+if false
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in 2:J[2]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + 0.0*x[i]*dxu[i,j,k] + 0.0*y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0)/r))/dx[3]/2.0
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in (1,J[1])
+            for k in 2:J[3]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(0.0*z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[2]/2.0
+            end
+        end
+    end
+    for i in 2:J[1]-1
+        for j in (1,J[2])
+            for k in (1,J[3])
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[1]/2.0
+            end
+        end
+    end
+    
+    #boundaries (corners)
+
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in (1,J[2]) 
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0)/r))/dx[3]/2.0
+            end
+        end
+    end
+end
+
+
     return du[:,:,:,:]
 end
 
+
+function F2(u,t,p)
+    x,y,z,dxu,dyu,dzu,Dx,Dy,Dz,D2x,D2y,D2z,d2,dx,ρ,J,par = p 
+    a, b, τ = par 
+    n = #[0.0,0.0] 
+    n = [1.0, 0.0]
+    d2 .= 0.0
+    for i in 1:J[1]
+        for j in 1:J[2]
+            for d in 1:2
+                dzu[d,i,j,:] = Dz*u[d,i,j,:]
+            end
+            d2[i,j,:] = D2z*u[1,i,j,:]
+        end
+    end
+    for i in 1:J[1]
+        for k in 1:J[3]
+            for d in 1:2
+                dyu[d,i,:,k] = Dy*u[d,i,:,k]
+            end
+            d2[i,:,k] += D2y*u[1,i,:,k] 
+        end
+    end
+    for j in 1:J[2]
+        for k in 1:J[3]
+            for d in 1:2
+                dxu[d,:,j,k] = Dx*u[d,:,j,k]
+            end
+            d2[:,j,k] += D2x*u[1,:,j,k] 
+        end
+    end
+
+    du[1,:,:,:] .= u[2,:,:,:]
+    @. du[2,:,:,:] .= d2[:,:,:]  - τ * u[2,:,:,:] - ρ[:,:,:]*u[1,:,:,:]^5
+
+    #boundaries (fases)
+
+    for k in (1,J[3])
+        for i in 1:J[1]
+            for j in 1:J[2]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[:,i,j,k] = a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] - b*(u[:,i,j,k] .- n[:])/r)
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in 1:J[1]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[:,i,j,k] = a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] - b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for i in (1,J[1])
+        for j in 1:J[2]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[:,i,j,k] = a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] - b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    
+    #boundaries (edges)
+    
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in 2:J[2]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[:,i,j,k] = a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] - b*(u[:,i,j,k] .- n[:])/r)
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in (1,J[1])
+            for k in 2:J[3]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[:,i,j,k] = a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] - b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for i in 2:J[1]-1
+        for j in (1,J[2])
+            for k in (1,J[3])
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[:,i,j,k] = a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] - b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    
+    #boundaries (corners)
+
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in (1,J[2]) 
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                du[:,i,j,k] = a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] - b*(u[:,i,j,k] .- n[:])/r)
+            end
+        end
+    end
+
+
+    return du[:,:,:,:]
+end
 
 function chichon(x,x0,Box,r0,p)
     d = x - x0
