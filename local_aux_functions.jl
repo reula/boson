@@ -145,7 +145,7 @@ function get_coords(Box,J)
 end
 
 
-function get_rho(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
+function get_rho_old(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
 
     Dx = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[1], xmax=Box_x[2], N=J[1])
     Dy = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[3], xmax=Box_x[4], N=J[2])
@@ -185,6 +185,72 @@ function get_rho(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
     return 2.0*ρ[:,:,:]
 end
 
+
+function get_rho(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
+
+    Dx = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[1], xmax=Box_x[2], N=J[1])
+    Dy = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[3], xmax=Box_x[4], N=J[2])
+    Dz = periodic_derivative_operator(derivative_order=1, accuracy_order=2, xmin=Box_x[3], xmax=Box_x[4], N=J[3])
+
+    Dϕ = Array{ComplexF64}(undef, 3, J...)
+    ρ = Array{Float64}(undef,J...)
+
+    for i in 1:J[1]
+        for j in 1:J[2]
+            Dϕ[3,i,j,:] = Dz*ϕ[i,j,:]
+        end
+    end
+    for j in 1:J[2]
+        for k in 1:J[3]
+            Dϕ[1,:,j,k] = Dx*ϕ[:,j,k]
+        end
+    end
+    for i in 1:J[1]
+        for k in 1:J[3]
+            Dϕ[2,i,:,k] = Dy*ϕ[i,:,k]
+        end
+    end
+
+    π2 = zeros(J...)
+    ∇2 = zeros(J...)
+    V = zeros(J...)
+
+    for i in 1:J[1]
+        for j in 1:J[2]
+            for k in 1:J[3]
+                for d in 1:3
+                    ∇2[i,j,k] = ∇2[i,j,k] + real(Dϕ[d,i,j,k]*conj(Dϕ[d,i,j,k]))
+                end
+                π2[i,j,k] = real(ϕ_t[i,j,k]*conj(ϕ_t[i,j,k]))
+                V[i,j,k] = real(ϕ[i,j,k]*conj(ϕ[i,j,k]))
+            end
+        end
+    end
+    return 2.0*π2[:,:,:], 2.0*∇2[:,:,:], 2.0*V[:,:,:]
+end
+
+
+
+function load_data_full_h5(data_name,Box,J,ϕ,ϕ_t,N_fields)
+    x, y, z = get_coords(Box,J)
+    π2, ∇2, V = get_rho(ϕ,ϕ_t,Box,J);
+    h5file = h5open("$(data_name).h5", "w") do file
+    write(file, "coord0", x)
+    write(file, "coord1", y)
+    write(file, "coord2", z)
+    write(file, "nvars", [N_fields])
+    write(file, "var0", real.(ϕ))
+    write(file, "var1", imag.(ϕ))
+    write(file, "var2", real.(ϕ_t))
+    write(file, "var3", imag.(ϕ_t))
+    write(file, "var4", π2)
+    write(file, "var5", ∇2)
+    write(file, "var6", V)
+    end
+end
+
+
+
 """
 function to relax an initial data
 """
@@ -212,7 +278,7 @@ function F(u,t,p)
     end
 
     du[1,:,:,:] .= u[2,:,:,:]
-    @. du[2,:,:,:] .= d2[:,:,:]  - τ * u[2,:,:,:] - ρ[:,:,:]#*u[1,:,:,:]^5
+    @. du[2,:,:,:] .= d2[:,:,:]  - τ * u[2,:,:,:] + ρ[:,:,:]*u[1,:,:,:]^5
 
     #boundaries (fases)
 
@@ -296,7 +362,7 @@ function FC(u,t,p)
     x,y,z,dxu,dyu,dzu,Dx,Dy,Dz,D2x,D2y,D2z,d2,dx,ρ,J,par = p 
     a, b, τ = par 
     n = #[0.0,0.0] 
-    n = [-1.0, 0.0] #asymtotic conditions
+    n = [1.0, 0.0] #asymtotic conditions
     d2 .= 0.0
     for i in 1:J[1]
         for j in 1:J[2]
@@ -324,7 +390,7 @@ function FC(u,t,p)
     end
 
     du[1,:,:,:] .= u[2,:,:,:]
-    @. du[2,:,:,:] .= d2[:,:,:]  - τ * u[2,:,:,:] - ρ[:,:,:]#*u[1,:,:,:]^5
+    @. du[2,:,:,:] .= d2[:,:,:] - τ * u[2,:,:,:] - ρ[:,:,:]#*u[1,:,:,:]^5
 
     #boundaries (fases)
 
@@ -332,7 +398,8 @@ function FC(u,t,p)
         for i in 1:J[1]
             for j in 1:J[2]
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[:,i,j,k] = -a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + b*(u[:,i,j,k] .- n[:])/r)
+                xdu = x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + z[k]*dzu[:,i,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
             end
         end
     end
@@ -340,7 +407,8 @@ function FC(u,t,p)
         for i in 1:J[1]
             for k in 1:J[3]
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[:,i,j,k] = -a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + b*(u[:,i,j,k] .- n[:]))/r
+                xdu = x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + z[k]*dzu[:,i,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
             end
         end
     end
@@ -348,7 +416,8 @@ function FC(u,t,p)
         for j in 1:J[2]
             for k in 1:J[3]
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[:,i,j,k] = -a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + b*(u[:,i,j,k] .- n[:]))/r
+                xdu = x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + z[k]*dzu[:,i,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
             end
         end
     end
@@ -359,7 +428,8 @@ function FC(u,t,p)
         for i in (1,J[1])
             for j in 2:J[2]-1
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[:,i,j,k] = -a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + b*(u[:,i,j,k] .- n[:])/r)
+                xdu = x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + z[k]*dzu[:,i,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
             end
         end
     end
@@ -367,7 +437,8 @@ function FC(u,t,p)
         for i in (1,J[1])
             for k in 2:J[3]-1
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[:,i,j,k] = -a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + b*(u[:,i,j,k] .- n[:]))/r
+                xdu = x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + z[k]*dzu[:,i,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
             end
         end
     end
@@ -375,7 +446,8 @@ function FC(u,t,p)
         for j in (1,J[2])
             for k in (1,J[3])
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[:,i,j,k] = -a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + b*(u[:,i,j,k] .- n[:]))/r
+                xdu = x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + z[k]*dzu[:,i,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
             end
         end
     end
@@ -386,7 +458,8 @@ function FC(u,t,p)
         for i in (1,J[1])
             for j in (1,J[2]) 
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[:,i,j,k] = -a*(z[k]*dzu[:,i,j,k] + x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + b*(u[:,i,j,k] .- n[:])/r)
+                xdu = x[i]*dxu[:,i,j,k] + y[j]*dyu[:,i,j,k] + z[k]*dzu[:,i,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
             end
         end
     end
