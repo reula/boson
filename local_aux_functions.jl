@@ -226,7 +226,7 @@ function get_rho(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
             end
         end
     end
-    return 2.0*π2[:,:,:], 2.0*∇2[:,:,:], 2.0*V[:,:,:]
+    return π2[:,:,:], ∇2[:,:,:], V[:,:,:]
 end
 
 
@@ -278,13 +278,13 @@ function F(u,t,p)
     end
 
     du[1,:,:,:] .= u[2,:,:,:]
-    @. du[2,:,:,:] .= d2[:,:,:]  - τ * u[2,:,:,:] + ρ[:,:,:]*u[1,:,:,:]^5
+    @. du[2,:,:,:] .= d2[:,:,:]  - τ * u[2,:,:,:] - ρ[:,:,:]#*u[1,:,:,:]^5
 
     #boundaries (fases)
 
     for k in (1,J[3])
-        for i in 1:J[1]
-            for j in 1:J[2]
+        for i in 2:J[1]-1
+            for j in 2:J[2]-1
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 u_r = (x[i]*dxu[1,i,j,k] + y[j]*dyu[1,i,j,k] + z[k]*dzu[1,i,j,k])/r
                 du[1,i,j,k] += -(u_r + (u[1,i,j,k] - 1.0)/r)
@@ -293,8 +293,8 @@ function F(u,t,p)
         end
     end
     for j in (1,J[2])
-        for i in 1:J[1]
-            for k in 1:J[3]
+        for i in 2:J[1]-1
+            for k in 2:J[3]-1
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 u_r = (x[i]*dxu[1,i,j,k] + y[j]*dyu[1,i,j,k] + z[k]*dzu[1,i,j,k])/r
                 du[1,i,j,k] += -(u_r + (u[1,i,j,k] - 1.0)/r)
@@ -303,8 +303,8 @@ function F(u,t,p)
         end
     end
     for i in (1,J[1])
-        for j in 1:J[2]
-            for k in 1:J[3]
+        for j in 2:J[2]-1
+            for k in 2:J[3]-1
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 u_r = (x[i]*dxu[1,i,j,k] + y[j]*dyu[1,i,j,k] + z[k]*dzu[1,i,j,k])/r
                 du[1,i,j,k] += -(u_r + (u[1,i,j,k] - 1.0)/r)
@@ -315,12 +315,14 @@ function F(u,t,p)
     
     #boundaries (edges)
     
-if false
+if true
     for k in (1,J[3])
         for i in (1,J[1])
             for j in 2:J[2]-1
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + 0.0*x[i]*dxu[i,j,k] + 0.0*y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0)/r))/dx[3]/2.0
+                u_r = (x[i]*dxu[1,i,j,k] + y[j]*dyu[1,i,j,k] + z[k]*dzu[1,i,j,k])/r
+                du[1,i,j,k] += -(u_r + (u[1,i,j,k] - 1.0)/r)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(u_r + b*(u[1,i,j,k] .- 1.0))/r)/dx[1]*2.0
             end
         end
     end
@@ -328,7 +330,9 @@ if false
         for i in (1,J[1])
             for k in 2:J[3]-1
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[2,i,j,k] += - (u[2,i,j,k] + a*(0.0*z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[2]/2.0
+                u_r = (x[i]*dxu[1,i,j,k] + y[j]*dyu[1,i,j,k] + z[k]*dzu[1,i,j,k])/r
+                du[1,i,j,k] += -(u_r + (u[1,i,j,k] - 1.0)/r)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(u_r + b*(u[1,i,j,k] .- 1.0))/r)/dx[1]*2.0
             end
         end
     end
@@ -336,7 +340,9 @@ if false
         for j in (1,J[2])
             for k in (1,J[3])
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0))/r)/dx[1]/2.0
+                u_r = (x[i]*dxu[1,i,j,k] + y[j]*dyu[1,i,j,k] + z[k]*dzu[1,i,j,k])/r
+                du[1,i,j,k] += -(u_r + (u[1,i,j,k] - 1.0)/r)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(u_r + b*(u[1,i,j,k] .- 1.0))/r)/dx[1]*2.0
             end
         end
     end
@@ -347,7 +353,9 @@ if false
         for i in (1,J[1])
             for j in (1,J[2]) 
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
-                du[2,i,j,k] += - (u[2,i,j,k] + a*(z[k]*dzu[i,j,k] + x[i]*dxu[i,j,k] + y[j]*dyu[i,j,k] - b*(u[1,i,j,k] .- 1.0)/r))/dx[3]/2.0
+                u_r = (x[i]*dxu[1,i,j,k] + y[j]*dyu[1,i,j,k] + z[k]*dzu[1,i,j,k])/r
+                du[1,i,j,k] += -(u_r + (u[1,i,j,k] - 1.0)/r)
+                du[2,i,j,k] += - (u[2,i,j,k] + a*(u_r + b*(u[1,i,j,k] .- 1.0))/r)/dx[1]*2.0
             end
         end
     end
@@ -496,7 +504,7 @@ end
 
 
 function get_source(f, par)
-    @show x,y,z,x0,Box_x, r0, p, J = par
+    x,y,z,x0,Box_x, r0, p, J = par
     m = zeros(J...)
     for i in 1:J[1]
         for j in 1:J[2]
