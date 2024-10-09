@@ -264,13 +264,17 @@ end
 Add one face of periodic arrays to make them symmetric, that is we add a row and a column with the first values
 """
 function add_last_points(m)
-    @show J = size(m)
-    @show J_large = J .+ (1,1,1)
+    J = size(m)
+    J_large = J .+ (1,1,1)
     m_l = zeros(J_large)
     m_l[1:J[1],1:J[2],1:J[3]] = m
-    m_l[J[1]+1,:,:] = m[1,:,:]
-    m_l[:,J[2]+1,:] = m[:,1,:]
-    m_l[:,:,J[3]+1] = m[:,:,1]
+    m_l[J[1]+1,1:J[2],1:J[3]] = m[1,:,:]
+    m_l[1:J[1],J[2]+1,1:J[3]] = m[:,1,:]
+    m_l[1:J[1],1:J[2],J[3]+1] = m[:,:,1]
+    m_l[1:J[1],J[2]+1,J[3]+1] = m[:,1,1]
+    m_l[J[1]+1,J[2]+1,1:J[3]] = m[1,1,:]
+    m_l[J[1]+1,1:J[2],J[3]+1] = m[1,:,1]
+    m_l[J[1]+1,J[2]+1,J[3]+1] = m[1,1,1]
     return m_l[:,:,:]
 end
 
