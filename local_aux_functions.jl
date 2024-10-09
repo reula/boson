@@ -144,6 +144,17 @@ function get_coords(Box,J)
     return x, y ,z
 end
 
+"""
+add some extra grid point
+"""
+function get_coords_large(Box,J)
+    dx = differentials(Box,J)
+    x = [Box_x[1] + (i-1)*dx[1] for i in 1:J[1]+1]
+    y = [Box_x[3] + (i-1)*dx[2] for i in 1:J[2]+1]
+    z = [Box_x[5] + (i-1)*dx[3] for i in 1:J[3]+1]
+    return x, y ,z
+end
+
 
 function get_rho_old(ϕ,ϕ_t,Box_x,J;accuracy_order=2)
 
@@ -232,21 +243,35 @@ end
 
 
 function load_data_full_h5(data_name,Box,J,ϕ,ϕ_t,N_fields)
-    x, y, z = get_coords(Box,J)
+    x, y, z = get_coords_large(Box,J)
     π2, ∇2, V = get_rho(ϕ,ϕ_t,Box,J);
     h5file = h5open("$(data_name).h5", "w") do file
     write(file, "coord0", x)
     write(file, "coord1", y)
     write(file, "coord2", z)
     write(file, "nvars", [N_fields])
-    write(file, "var0", real.(ϕ))
-    write(file, "var1", imag.(ϕ))
-    write(file, "var2", real.(ϕ_t))
-    write(file, "var3", imag.(ϕ_t))
-    write(file, "var4", π2)
-    write(file, "var5", ∇2)
-    write(file, "var6", V)
+    write(file, "var0", add_last_points(real.(ϕ)))
+    write(file, "var1", add_last_points(imag.(ϕ)))
+    write(file, "var2", add_last_points(real.(ϕ_t)))
+    write(file, "var3", add_last_points(imag.(ϕ_t)))
+    write(file, "var4", add_last_points(π2))
+    write(file, "var5", add_last_points(∇2))
+    write(file, "var6", add_last_points(V))
     end
+end
+
+"""
+Add one face of periodic arrays to make them symmetric, that is we add a row and a column with the first values
+"""
+function add_last_points(m)
+    @show J = size(m)
+    @show J_large = J .+ (1,1,1)
+    m_l = zeros(J_large)
+    m_l[1:J[1],1:J[2],1:J[3]] = m
+    m_l[J[1]+1,:,:] = m[1,:,:]
+    m_l[:,J[2]+1,:] = m[:,1,:]
+    m_l[:,:,J[3]+1] = m[:,:,1]
+    return m_l[:,:,:]
 end
 
 
@@ -475,6 +500,323 @@ function FC(u,t,p)
 
     return du[:,:,:,:]
 end
+
+
+function FCR(u,t,p)
+    coords,boundary_derivs,derivs,d2,dx,ρ,J,par = p 
+    x,y,z = coords
+    dxu_x,dyu_x,dzu_x,dxu_y,dyu_y,dzu_y,dxu_z,dyu_z,dzu_z = boundary_derivs 
+    Dx,Dy,Dz,D2x,D2y,D2z = derivs
+    a, b, τ = par 
+    n = #[0.0,0.0] 
+    n = [1.0, 0.0] #asymtotic conditions
+    d2 .= 0.0
+#face z (i,j)
+    for i in 1:J[1]
+        for j in 1:J[2]
+            for d in 1:2
+                dzu_z[1,d,i,j] = derivative_left(D2z, u[d,i,j,:], Val{1}())
+                dzu_z[2,d,i,j] = derivative_right(D2z, u[d,i,j,:], Val{1}())
+            end
+            d2[i,j,:] = D2z*u[1,i,j,:]
+        end
+        for d in 1:2
+            dyu_z[1,d,i,:] = Dy*u[d,i,:,1]
+            dyu_z[2,d,i,:] = Dy*u[d,i,:,J[3]]
+        end
+    end
+    for j in 1:J[2]
+        for d in 1:2
+            dxu_z[1,d,:,j] = Dx*u[d,:,j,1]
+            dxu_z[2,d,:,j] = Dx*u[d,:,j,J[3]]
+        end
+    end
+#face y (i,k)
+    for i in 1:J[1]
+        for k in 1:J[3]
+            for d in 1:2
+                dzu_y[1,d,i,k] = derivative_left(D2y,  u[d,i,:,k], Val{1}())
+                dzu_y[2,d,i,k] = derivative_right(D2y, u[d,i,:,k], Val{1}())
+            end
+            d2[i,:,k] += D2y*u[1,i,:,k]
+        end
+        for d in 1:2
+            dzu_y[1,d,i,:] = Dz*u[d,i,1,:]
+            dzu_y[2,d,i,:] = Dz*u[d,i,J[2],:]
+        end
+    end
+    for k in 1:J[3]
+        for d in 1:2
+            dxu_y[1,d,:,k] = Dx*u[d,:,1,k]
+            dxu_y[2,d,:,k] = Dx*u[d,:,J[2],k]
+        end
+    end
+#face x (j,k)
+for j in 1:J[2]
+    for k in 1:J[3]
+        for d in 1:2
+            dzu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
+            dzu_x[2,d,j,k] = derivative_right(D2x, u[d,:,j,k], Val{1}())
+        end
+        d2[:,j,k] += D2x*u[1,:,j,k]
+    end
+    for d in 1:2
+        dzu_x[1,d,j,:] = Dz*u[d,1,j,:]
+        dzu_x[2,d,j,:] = Dz*u[d,J[1],j,:]
+    end
+end
+for k in 1:J[3]
+    for d in 1:2
+        dyu_x[1,d,:,k] = Dx*u[d,1,:,k]
+        dyu_x[2,d,:,k] = Dx*u[d,J[2],:,k]
+    end
+end
+
+    du[1,:,:,:] .= u[2,:,:,:]
+    @. du[2,:,:,:] .= d2[:,:,:] - τ * u[2,:,:,:] - ρ[:,:,:]#*u[1,:,:,:]^5
+
+    #boundaries (fases)
+
+    for k in (1,J[3])
+        for i in 1:J[1]
+            for j in 1:J[2]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in 1:J[1]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(j),:,i,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for i in (1,J[1])
+        for j in 1:J[2]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    
+    #boundaries (edges)
+    
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in 2:J[2]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in (1,J[1])
+            for k in 2:J[3]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(k),:,i,j]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for i in 2:J[1]-1
+        for j in (1,J[2])
+            for k in (1,J[3])
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    
+    #boundaries (corners)
+
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in (1,J[2]) 
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+
+
+    return du[:,:,:,:]
+end
+
+
+
+function FCR_Full(u,t,p)
+    coords,boundary_derivs,derivs,d2,dx,ρ,J,n_fields,par = p 
+    x,y,z = coords
+    dxu_x,dyu_x,dzu_x,dxu_y,dyu_y,dzu_y,dxu_z,dyu_z,dzu_z = boundary_derivs 
+    Dx,Dy,Dz,D2x,D2y,D2z = derivs
+    π2,∇2,V = ρ
+    a, b, τ = par 
+    n = #[0.0,0.0] 
+    n = [1.0, 0.0,1.0,0.0] #asymtotic conditions
+    d2 .= 0.0
+#face z (i,j)
+    for i in 1:J[1]
+        for j in 1:J[2]
+            for d in 1:n_fields
+                dzu_z[1,d,i,j] = derivative_left(D2z, u[d,i,j,:], Val{1}())
+                dzu_z[2,d,i,j] = derivative_right(D2z, u[d,i,j,:], Val{1}())
+            end
+            d2[1,i,j,:] = D2z*u[1,i,j,:]
+            d2[2,i,j,:] = D2z*u[3,i,j,:]
+        end
+        for d in 1:n_fields
+            dyu_z[1,d,i,:] = Dy*u[d,i,:,1]
+            dyu_z[2,d,i,:] = Dy*u[d,i,:,J[3]]
+        end
+    end
+    for j in 1:J[2]
+        for d in 1:n_fields
+            dxu_z[1,d,:,j] = Dx*u[d,:,j,1]
+            dxu_z[2,d,:,j] = Dx*u[d,:,j,J[3]]
+        end
+    end
+#face y (i,k)
+    for i in 1:J[1]
+        for k in 1:J[3]
+            for d in 1:n_fields
+                dzu_y[1,d,i,k] = derivative_left(D2y,  u[d,i,:,k], Val{1}())
+                dzu_y[2,d,i,k] = derivative_right(D2y, u[d,i,:,k], Val{1}())
+            end
+            d2[1,i,:,k] += D2y*u[1,i,:,k]
+            d2[2,i,:,k] += D2y*u[3,i,:,k]
+        end
+        for d in 1:n_fields
+            dzu_y[1,d,i,:] = Dz*u[d,i,1,:]
+            dzu_y[2,d,i,:] = Dz*u[d,i,J[2],:]
+        end
+    end
+    for k in 1:J[3]
+        for d in 1:n_fields
+            dxu_y[1,d,:,k] = Dx*u[d,:,1,k]
+            dxu_y[2,d,:,k] = Dx*u[d,:,J[2],k]
+        end
+    end
+#face x (j,k)
+for j in 1:J[2]
+    for k in 1:J[3]
+        for d in 1:n_fields
+            dzu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
+            dzu_x[2,d,j,k] = derivative_right(D2x, u[d,:,j,k], Val{1}())
+        end
+        d2[1,:,j,k] += D2x*u[1,:,j,k]
+        d2[2,:,j,k] += D2x*u[3,:,j,k]
+    end
+    for d in 1:n_fields
+        dzu_x[1,d,j,:] = Dz*u[d,1,j,:]
+        dzu_x[2,d,j,:] = Dz*u[d,J[1],j,:]
+    end
+end
+for k in 1:J[3]
+    for d in 1:n_fields
+        dyu_x[1,d,:,k] = Dx*u[d,1,:,k]
+        dyu_x[2,d,:,k] = Dx*u[d,J[2],:,k]
+    end
+end
+
+    du[1,:,:,:] .= u[2,:,:,:]
+    du[3,:,:,:] .= u[4,:,:,:]
+    tau = 
+    @. du[2,:,:,:] .= d2[1,:,:,:] - τ * u[2,:,:,:] +  2π*((π2[:,:,:] + V[:,:,:])*u[1,:,:,:]^5 + ∇2[:,:,:]*u[1,:,:,:])
+    @. du[4,:,:,:] .= d2[2,:,:,:] - τ * u[4,:,:,:] -  2π*u[4,:,:,:]*(u[1,:,:,:]^4)*(3*(π2[:,:,:] - V[:,:,:]) - ∇2[:,:,:])
+
+    #boundaries (fases)
+
+    for k in (1,J[3])
+        for i in 1:J[1]
+            for j in 1:J[2]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in 1:J[1]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(j),:,i,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for i in (1,J[1])
+        for j in 1:J[2]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    
+    #boundaries (edges)
+    
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in 2:J[2]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in (1,J[1])
+            for k in 2:J[3]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(k),:,i,j]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    for i in 2:J[1]-1
+        for j in (1,J[2])
+            for k in (1,J[3])
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+    
+    #boundaries (corners)
+
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in (1,J[2]) 
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[:,i,j,k] = -a*(xdu + b*(u[:,i,j,k] .- n[:]))/r
+            end
+        end
+    end
+
+
+    return du[:,:,:,:]
+end
+
+
+function fase(k) 
+    if k == 1 
+        return 1
+    else
+        return 2
+    end
+end 
 
 function chichon(x,x0,Box,r0,p)
     d = x - x0
