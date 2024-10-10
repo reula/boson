@@ -668,7 +668,7 @@ function FCR_Full(u,t,p)
     n = [1.0, 0.0,1.0,0.0] #asymtotic conditions
     d2 .= 0.0
 #face z (i,j)
-    for i in 1:J[1]
+Threads.@threads for i in 1:J[1]
         for j in 1:J[2]
             for d in 1:n_fields
                 dzu_z[1,d,i,j] = derivative_left(D2z, u[d,i,j,:], Val{1}())
@@ -689,7 +689,7 @@ function FCR_Full(u,t,p)
         end
     end
 #face y (i,k)
-    for i in 1:J[1]
+Threads.@threads    for i in 1:J[1]
         for k in 1:J[3]
             for d in 1:n_fields
                 dzu_y[1,d,i,k] = derivative_left(D2y,  u[d,i,:,k], Val{1}())
@@ -710,7 +710,7 @@ function FCR_Full(u,t,p)
         end
     end
 #face x (j,k)
-for j in 1:J[2]
+Threads.@threads for j in 1:J[2]
     for k in 1:J[3]
         for d in 1:n_fields
             dzu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
@@ -733,9 +733,9 @@ end
 
     du[1,:,:,:] .= u[2,:,:,:]
     du[3,:,:,:] .= u[4,:,:,:]
-    tau = 
+    
     @. du[2,:,:,:] .= d2[1,:,:,:] - τ * u[2,:,:,:] +  2π*((π2[:,:,:] + V[:,:,:])*u[1,:,:,:]^5 + ∇2[:,:,:]*u[1,:,:,:])
-    @. du[4,:,:,:] .= d2[2,:,:,:] - τ * u[4,:,:,:] -  2π*u[4,:,:,:]*(u[1,:,:,:]^4)*(3*(π2[:,:,:] - V[:,:,:]) - ∇2[:,:,:])
+    @. du[4,:,:,:] .= d2[2,:,:,:] - τ * u[4,:,:,:] -  2π*u[3,:,:,:]*((u[1,:,:,:]^4)*(7*π2[:,:,:] - 5*V[:,:,:]) - ∇2[:,:,:])
 
     #boundaries (fases)
 
@@ -860,5 +860,16 @@ function get_source(f, par)
         end
     end
     return m[:,:,:]
+end
+
+function embed_source(m,J)
+    J_in = size(m)
+    if J == J_in .* 3
+        m_l = zeros(J...)
+        m_l[(J_in[1]+1):2*J_in[1],(J_in[2]+1):2*J_in[2],(J_in[3]+1):2*J_in[3]] = m[:,:,:]
+    else
+        error("J sizes don't match")
+    end
+    return m_l[:,:,:]
 end
 
