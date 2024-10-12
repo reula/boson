@@ -19,8 +19,8 @@ end
 
 
 
-function f(k,f_pars)
-    (k0,δ) = f_pars
+function capa(k,c_pars)
+    k0, δ = c_pars
     if abs(k'*k - k0^2) < δ^2
         return (1.0 + 0.0im)/(2π*(k0*2*δ)) # normalized so that the integral is 1
     else
@@ -28,8 +28,8 @@ function f(k,f_pars)
     end
 end
 
-function h(k,h_pars)
-    k0 = h_pars
+function bola(k,b_pars)
+    k0, δ  = b_pars
     if abs(k'*k)< k0^2
         return (1.0 + 0.0im)/2*π/k0^2
     else
@@ -67,7 +67,7 @@ function get_fourier_data(f,Box_x,J,m2,f_pars)
         for j in 1:J[2]
             for l in 1:J[3]
             ω_val = ω([kx[i];ky[j];kz[l]],m2)
-            g[i,j,l] = exp(im*2*π*rand())*f([kx[i],ky[j],kz[l]],f_pars...)/sqrt(2.0*ω_val)
+            g[i,j,l] = exp(im*2*π*rand())*f([kx[i],ky[j],kz[l]],f_pars)/sqrt(2.0*ω_val)
             g_t[i,j,l] = im*sqrt(2.0*ω_val)*g[i,j,l]
             ω_val_p = ω([kx_p[i];ky_p[j];kz_p[l]],m2)
             g_p[i,j,l] = f([kx_p[i],ky_p[j],kz_p[l]],f_pars)*exp(im*2*π*rand())/sqrt(2.0*ω_val_p)
@@ -873,3 +873,5 @@ function embed_source(m,J)
     return m_l[:,:,:]
 end
 
+get_norm_time(v,m) = [norm(v[m,field,:,:,:] for field in 1:length(v[1,:,1,1,1]))]/sqrt(prod(size(v[1,1,:,:,:])))
+get_norms(u) = [norm(v[field,:,:,:] for field in 1:length(v[1,1,1,1]))]/sqrt(prod(size(v[1,:,:,:])))
