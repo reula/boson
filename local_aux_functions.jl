@@ -862,16 +862,27 @@ function get_source(f, par)
     return m[:,:,:]
 end
 
-function embed_source(m,J)
+function embed_source(m,J,enlarge_factor)
     J_in = size(m)
-    if J == J_in .* 3
-        m_l = zeros(J...)
-        m_l[(J_in[1]+1):2*J_in[1],(J_in[2]+1):2*J_in[2],(J_in[3]+1):2*J_in[3]] = m[:,:,:]
+    if enlarge_factor == 3
+        if J == J_in .* 3
+            m_l = zeros(J...)
+            m_l[(J_in[1]+1):2*J_in[1],(J_in[2]+1):2*J_in[2],(J_in[3]+1):2*J_in[3]] = m[:,:,:]
+        else
+            error("J sizes don't match")
+        end
+    elseif enlarge_factor == 2
+        if J == J_in .+ 2 .*((J_in .÷2) .+1)
+            m_l = zeros(J...)
+            m_l[J_in[1]÷2+2:J_in[1]÷2+1+J_in[1],J_in[2]÷2+2:J_in[2]÷2+1+J_in[2],J_in[3]÷2+2:J_in[3]÷2+1+J_in[3]] = m[:,:,:]
+        else
+            error("J sizes don't match")
+        end
     else
-        error("J sizes don't match")
+        error("enlarge_factor = $(enlarge_factor) not implemented")
     end
     return m_l[:,:,:]
 end
 
-get_norm_time(v,m) = [norm(v[m,field,:,:,:] for field in 1:length(v[1,:,1,1,1]))]/sqrt(prod(size(v[1,1,:,:,:])))
-get_norms(u) = [norm(v[field,:,:,:] for field in 1:length(v[1,1,1,1]))]/sqrt(prod(size(v[1,:,:,:])))
+get_norm_time(v,m) = [norm(v[m,field,:,:,:]) for field in 1:lastindex(v[1,:,1,1,1])]/sqrt(prod(size(v[1,1,:,:,:])))
+get_norms(u) = [norm(u[field,:,:,:]) for field in 1:lastindex(u[:,1,1,1])]/sqrt(prod(size(u[1,:,:,:])))
