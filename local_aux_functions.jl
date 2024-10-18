@@ -282,6 +282,7 @@ end
 
 """
 function to relax an initial data
+version with Penalties
 """
 function F(u,t,p)
     x,y,z,dxu,dyu,dzu,Dx,Dy,Dz,D2x,D2y,D2z,d2,dx,ρ,J,par = p 
@@ -393,7 +394,9 @@ end
 
     return du[:,:,:,:]
 end
-
+"""
+function to relax initial data, version with boudary conditions imposed at boundary explicitly.
+"""
 
 function FC(u,t,p)
     x,y,z,dxu,dyu,dzu,Dx,Dy,Dz,D2x,D2y,D2z,d2,dx,ρ,J,par = p 
@@ -505,7 +508,9 @@ function FC(u,t,p)
     return du[:,:,:,:]
 end
 
-
+"""
+function to relax initial data, version with boudary conditions imposed at boundary explicitly.
+"""
 function FCR(u,t,p)
     coords,boundary_derivs,derivs,d2,dx,ρ,J,par = p 
     x,y,z = coords
@@ -655,7 +660,9 @@ end
     return du[:,:,:,:]
 end
 
-
+"""
+function to relax initial data and lapse, version with boudary conditions imposed at boundary explicitly.
+"""
 
 function FCR_Full(u,t,p)
     coords,boundary_derivs,derivs,d2,dx,ρ,J,n_fields,par = p 
@@ -813,6 +820,186 @@ end
     return du[:,:,:,:]
 end
 
+"""
+function to relax initial data and lapse, version with boudary conditions imposed with Penalties.
+"""
+function F_full(u,t,p)
+    coords,boundary_derivs,derivs,d2,dx,ρ,J,n_fields,par = p 
+    x,y,z = coords
+    dxu_x,dyu_x,dzu_x,dxu_y,dyu_y,dzu_y,dxu_z,dyu_z,dzu_z = boundary_derivs 
+    Dx,Dy,Dz,D2x,D2y,D2z = derivs
+    π2,∇2,V = ρ
+    a, b, τ = par 
+    n = #[0.0,0.0] 
+    n = [1.0, 0.0,1.0,0.0] #asymtotic conditions
+    d2 .= 0.0
+#face z (i,j)
+Threads.@threads for i in 1:J[1]
+        for j in 1:J[2]
+            for d in 1:n_fields
+                dzu_z[1,d,i,j] = derivative_left(D2z, u[d,i,j,:], Val{1}())
+                dzu_z[2,d,i,j] = derivative_right(D2z, u[d,i,j,:], Val{1}())
+            end
+            d2[1,i,j,:] = D2z*u[1,i,j,:]
+            d2[2,i,j,:] = D2z*u[3,i,j,:]
+        end
+        for d in 1:n_fields
+            dyu_z[1,d,i,:] = Dy*u[d,i,:,1]
+            dyu_z[2,d,i,:] = Dy*u[d,i,:,J[3]]
+        end
+    end
+    for j in 1:J[2]
+        for d in 1:n_fields
+            dxu_z[1,d,:,j] = Dx*u[d,:,j,1]
+            dxu_z[2,d,:,j] = Dx*u[d,:,j,J[3]]
+        end
+    end
+#face y (i,k)
+Threads.@threads    for i in 1:J[1]
+        for k in 1:J[3]
+            for d in 1:n_fields
+                dzu_y[1,d,i,k] = derivative_left(D2y,  u[d,i,:,k], Val{1}())
+                dzu_y[2,d,i,k] = derivative_right(D2y, u[d,i,:,k], Val{1}())
+            end
+            d2[1,i,:,k] += D2y*u[1,i,:,k]
+            d2[2,i,:,k] += D2y*u[3,i,:,k]
+        end
+        for d in 1:n_fields
+            dzu_y[1,d,i,:] = Dz*u[d,i,1,:]
+            dzu_y[2,d,i,:] = Dz*u[d,i,J[2],:]
+        end
+    end
+    for k in 1:J[3]
+        for d in 1:n_fields
+            dxu_y[1,d,:,k] = Dx*u[d,:,1,k]
+            dxu_y[2,d,:,k] = Dx*u[d,:,J[2],k]
+        end
+    end
+#face x (j,k)
+Threads.@threads for j in 1:J[2]
+    for k in 1:J[3]
+        for d in 1:n_fields
+            dzu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
+            dzu_x[2,d,j,k] = derivative_right(D2x, u[d,:,j,k], Val{1}())
+        end
+        d2[1,:,j,k] += D2x*u[1,:,j,k]
+        d2[2,:,j,k] += D2x*u[3,:,j,k]
+    end
+    for d in 1:n_fields
+        dzu_x[1,d,j,:] = Dz*u[d,1,j,:]
+        dzu_x[2,d,j,:] = Dz*u[d,J[1],j,:]
+    end
+end
+for k in 1:J[3]
+    for d in 1:n_fields
+        dyu_x[1,d,:,k] = Dx*u[d,1,:,k]
+        dyu_x[2,d,:,k] = Dx*u[d,J[2],:,k]
+    end
+end
+
+    du[1,:,:,:] .= u[2,:,:,:]
+    du[3,:,:,:] .= u[4,:,:,:]
+    
+    @. du[2,:,:,:] .= d2[1,:,:,:] - τ * u[2,:,:,:] +  2π*((π2[:,:,:] + V[:,:,:])*u[1,:,:,:]^5 + ∇2[:,:,:]*u[1,:,:,:])
+    @. du[4,:,:,:] .= d2[2,:,:,:] - τ * u[4,:,:,:] -  2π*u[3,:,:,:]*((u[1,:,:,:]^4)*(7*π2[:,:,:] - 5*V[:,:,:]) - ∇2[:,:,:])
+
+    #boundaries (fases)
+
+    for k in (1,J[3])
+        for i in 1:J[1]
+            for j in 1:J[2]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
+                du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[3]*2.0
+                du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[3]*2.0
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in 1:J[1]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(j),:,i,k]
+                du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[2]*2.0
+                du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[2]*2.0
+            end
+        end
+    end
+    for i in (1,J[1])
+        for j in 1:J[2]
+            for k in 1:J[3]
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+            end
+        end
+    end
+    
+    #boundaries (edges)
+    
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in 2:J[2]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
+                du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+            end
+        end
+    end
+    for j in (1,J[2])
+        for i in (1,J[1])
+            for k in 2:J[3]-1
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(k),:,i,j]
+                du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+            end
+        end
+    end
+    for i in 2:J[1]-1
+        for j in (1,J[2])
+            for k in (1,J[3])
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+              end
+        end
+    end
+    
+    #boundaries (corners)
+
+    for k in (1,J[3])
+        for i in (1,J[1])
+            for j in (1,J[2]) 
+                r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
+                xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
+                du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+             end
+        end
+    end
+
+
+    return du[:,:,:,:]
+end
+
 
 function fase(k) 
     if k == 1 
@@ -847,8 +1034,6 @@ function carlossol(x,x0,Box,r0,A0)
     return 1 + A0*exp(-r^2/r02)
 end
 
-
-
 function get_source(f, par)
     x,y,z,x0,Box_x, r0, p, J = par
     m = zeros(J...)
@@ -876,7 +1061,7 @@ function embed_source(m,J,enlarge_factor)
             m_l = zeros(J...)
             m_l[J_in[1]÷2+2:J_in[1]÷2+1+J_in[1],J_in[2]÷2+2:J_in[2]÷2+1+J_in[2],J_in[3]÷2+2:J_in[3]÷2+1+J_in[3]] = m[:,:,:]
         else
-            error("J sizes don't match")
+            error("J sizes don't match J = $J, computed = $(J_in .+ 2 .*((J_in .÷2) .+1))")
         end
     else
         error("enlarge_factor = $(enlarge_factor) not implemented")
