@@ -699,8 +699,8 @@ Threads.@threads for i in 1:J[1]
 Threads.@threads    for i in 1:J[1]
         for k in 1:J[3]
             for d in 1:n_fields
-                dzu_y[1,d,i,k] = derivative_left(D2y,  u[d,i,:,k], Val{1}())
-                dzu_y[2,d,i,k] = derivative_right(D2y, u[d,i,:,k], Val{1}())
+                dyu_y[1,d,i,k] = derivative_left(D2y,  u[d,i,:,k], Val{1}())
+                dyu_y[2,d,i,k] = derivative_right(D2y, u[d,i,:,k], Val{1}())
             end
             d2[1,i,:,k] += D2y*u[1,i,:,k]
             d2[2,i,:,k] += D2y*u[3,i,:,k]
@@ -720,8 +720,8 @@ Threads.@threads    for i in 1:J[1]
 Threads.@threads for j in 1:J[2]
     for k in 1:J[3]
         for d in 1:n_fields
-            dzu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
-            dzu_x[2,d,j,k] = derivative_right(D2x, u[d,:,j,k], Val{1}())
+            dxu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
+            dxu_x[2,d,j,k] = derivative_right(D2x, u[d,:,j,k], Val{1}())
         end
         d2[1,:,j,k] += D2x*u[1,:,j,k]
         d2[2,:,j,k] += D2x*u[3,:,j,k]
@@ -733,8 +733,8 @@ Threads.@threads for j in 1:J[2]
 end
 for k in 1:J[3]
     for d in 1:n_fields
-        dyu_x[1,d,:,k] = Dx*u[d,1,:,k]
-        dyu_x[2,d,:,k] = Dx*u[d,J[2],:,k]
+        dyu_x[1,d,:,k] = Dy*u[d,1,:,k]
+        dyu_x[2,d,:,k] = Dy*u[d,J[1],:,k]
     end
 end
 
@@ -879,8 +879,8 @@ Threads.@threads    for i in 1:J[1]
 Threads.@threads for j in 1:J[2]
     for k in 1:J[3]
         for d in 1:n_fields
-            dzu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
-            dzu_x[2,d,j,k] = derivative_right(D2x, u[d,:,j,k], Val{1}())
+            dxu_x[1,d,j,k] = derivative_left(D2x,  u[d,:,j,k], Val{1}())
+            dxu_x[2,d,j,k] = derivative_right(D2x, u[d,:,j,k], Val{1}())
         end
         d2[1,:,j,k] += D2x*u[1,:,j,k]
         d2[2,:,j,k] += D2x*u[3,:,j,k]
@@ -892,8 +892,8 @@ Threads.@threads for j in 1:J[2]
 end
 for k in 1:J[3]
     for d in 1:n_fields
-        dyu_x[1,d,:,k] = Dx*u[d,1,:,k]
-        dyu_x[2,d,:,k] = Dx*u[d,J[2],:,k]
+        dyu_x[1,d,:,k] = Dy*u[d,1,:,k]
+        dyu_x[2,d,:,k] = Dy*u[d,J[1],:,k]
     end
 end
 
@@ -911,9 +911,9 @@ end
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
                 du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
-                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[3]*2.0
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[1] + (u[1,i,j,k] .- n[1]))/r)/dx[3]*2.0
                 du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
-                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[3]*2.0
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[3] + (u[3,i,j,k] .- n[3]))/r)/dx[3]*2.0
             end
         end
     end
@@ -923,9 +923,9 @@ end
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(j),:,i,k]
                 du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
-                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[2]*2.0
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[1] + (u[1,i,j,k] .- n[1]))/r)/dx[2]*2.0
                 du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
-                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[2]*2.0
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[3] + (u[3,i,j,k] .- n[3]))/r)/dx[2]*2.0
             end
         end
     end
@@ -935,9 +935,9 @@ end
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
                 du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
-                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[1] + (u[1,i,j,k] .- n[1]))/r)/dx[1]*2.0
                 du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
-                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[3] + (u[3,i,j,k] .- n[3]))/r)/dx[1]*2.0
             end
         end
     end
@@ -950,9 +950,9 @@ end
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 xdu = x[i]*dxu_z[fase(k),:,i,j] + y[j]*dyu_z[fase(k),:,i,j] + z[k]*dzu_z[fase(k),:,i,j]
                 du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
-                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[1] + (u[1,i,j,k] .- n[1]))/r)/dx[1]*2.0
                 du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
-                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[3] + (u[3,i,j,k] .- n[3]))/r)/dx[1]*2.0
             end
         end
     end
@@ -962,9 +962,9 @@ end
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 xdu = x[i]*dxu_y[fase(j),:,i,k] + y[j]*dyu_y[fase(j),:,i,k] + z[k]*dzu_y[fase(k),:,i,j]
                 du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
-                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[1] + (u[1,i,j,k] .- n[1]))/r)/dx[1]*2.0
                 du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
-                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[3] + (u[3,i,j,k] .- n[3]))/r)/dx[1]*2.0
             end
         end
     end
@@ -974,9 +974,9 @@ end
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
                 du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
-                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[1] + (u[1,i,j,k] .- n[1]))/r)/dx[1]*2.0
                 du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
-                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[3] + (u[3,i,j,k] .- n[3]))/r)/dx[1]*2.0
               end
         end
     end
@@ -989,9 +989,9 @@ end
                 r = sqrt(x[i]^2 + y[j]^2 + z[k]^2)
                 xdu = x[i]*dxu_x[fase(i),:,j,k] + y[j]*dyu_x[fase(i),:,j,k] + z[k]*dzu_x[fase(i),:,j,k]
                 du[1,i,j,k] += -(xdu[1] + (u[1,i,j,k] .- n[1]))/r
-                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[2] + (u[2,i,j,k] .- n[2]))/r)/dx[1]*2.0
+                du[2,i,j,k] += -(u[2,i,j,k] + (xdu[1] + (u[1,i,j,k] .- n[1]))/r)/dx[1]*2.0
                 du[3,i,j,k] += -(xdu[3] + (u[3,i,j,k] .- n[3]))/r
-                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[4] + (u[4,i,j,k] .- n[4]))/r)/dx[1]*2.0
+                du[4,i,j,k] += -(u[4,i,j,k] + (xdu[3] + (u[3,i,j,k] .- n[3]))/r)/dx[1]*2.0
              end
         end
     end
@@ -1071,3 +1071,32 @@ end
 
 get_norm_time(v,m) = [norm(v[m,field,:,:,:]) for field in 1:lastindex(v[1,:,1,1,1])]/sqrt(prod(size(v[1,1,:,:,:])))
 get_norms(u) = [norm(u[field,:,:,:]) for field in 1:lastindex(u[:,1,1,1])]/sqrt(prod(size(u[1,:,:,:])))
+
+
+#=
+@. model_phi(r,p) = (1 + p[1]/2/r)
+@. model_v(r,pv) = (1 - pv[1]/2/r)
+
+fit_phi = curve_fit(model_phi, x[200:J[1]], v[m,1,200:J[1],J[2] ÷ 2 , J[3]÷ 2], p0) 
+=#
+
+function get_coords(Box, J; periodic = true)
+    D = length(J)
+    d = 1
+    x = [Box[2*d-1] + (Box[2d]-Box[2*d-1])/J[d]*(i-1) for i in 1:J[d]]
+    if D == 1
+        return x
+    elseif D == 2
+        d = 2
+        y = [Box[2*d-1] + (Box[2d]-Box[2*d-1])/J[d]*(i-1) for i in 1:J[d]]
+        return x, y
+    elseif D == 3
+        d = 2
+        y = [Box[2*d-1] + (Box[2d]-Box[2*d-1])/J[d]*(i-1) for i in 1:J[d]]
+        d = 3
+        z = [Box[2*d-1] + (Box[2d]-Box[2*d-1])/J[d]*(i-1) for i in 1:J[d]]
+        return x, y, z 
+    else 
+        error("not implemented for D > 3, D = $D")
+    end
+end
